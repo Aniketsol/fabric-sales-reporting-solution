@@ -1,0 +1,213 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "CopyJob admin": {
+      "type": "string"
+    },
+    "PowerBIDatasets admin": {
+      "type": "string"
+    },
+    "NotebookAdmin admin": {
+      "type": "string"
+    },
+    "MicrosoftOutlook admin": {
+      "type": "string"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "name": "daily_sales_pipeline",
+      "type": "pipelines",
+      "apiVersion": "2018-06-01",
+      "properties": {
+        "activities": [
+          {
+            "name": "SQl to Datalake CRM",
+            "type": "InvokeCopyJob",
+            "dependsOn": [],
+            "policy": {
+              "timeout": "0.12:00:00",
+              "retry": 0,
+              "retryIntervalInSeconds": 30,
+              "secureOutput": false,
+              "secureInput": false
+            },
+            "typeProperties": {
+              "copyJobId": "<REDACTED>",
+              "workspaceId": "<REDACTED>",
+              "operationType": "RunCopyJob"
+            },
+            "externalReferences": {
+              "connection": "[parameters('CopyJob admin')]"
+            }
+          },
+          {
+            "name": "SQL to Datalake ERP",
+            "type": "InvokeCopyJob",
+            "dependsOn": [
+              {
+                "activity": "SQl to Datalake CRM",
+                "dependencyConditions": [
+                  "Succeeded"
+                ]
+              }
+            ],
+            "policy": {
+              "timeout": "0.12:00:00",
+              "retry": 0,
+              "retryIntervalInSeconds": 30,
+              "secureOutput": false,
+              "secureInput": false
+            },
+            "typeProperties": {
+              "copyJobId": "<REDACTED>",
+              "workspaceId": "<REDACTED>",
+              "operationType": "RunCopyJob"
+            },
+            "externalReferences": {
+              "connection": "[parameters('CopyJob admin')]"
+            }
+          },
+          {
+            "name": "Semantic model refresh1",
+            "type": "PBISemanticModelRefresh",
+            "dependsOn": [
+              {
+                "activity": "Data Quality Checks",
+                "dependencyConditions": [
+                  "Succeeded"
+                ]
+              }
+            ],
+            "policy": {
+              "timeout": "0.12:00:00",
+              "retry": 0,
+              "retryIntervalInSeconds": 30,
+              "secureOutput": false,
+              "secureInput": false
+            },
+            "typeProperties": {
+              "method": "POST",
+              "operationType": "SemanticModelRefresh",
+              "groupId": "<REDACTED>",
+              "datasetId": "<REDACTED>",
+              "waitOnCompletion": true,
+              "commitMode": "Transactional"
+            },
+            "externalReferences": {
+              "connection": "[parameters('PowerBIDatasets admin')]"
+            }
+          },
+          {
+            "name": "Data Quality Checks",
+            "type": "TridentNotebook",
+            "dependsOn": [
+              {
+                "activity": "Bronze to Silver to Gold",
+                "dependencyConditions": [
+                  "Succeeded"
+                ]
+              }
+            ],
+            "policy": {
+              "timeout": "0.12:00:00",
+              "retry": 0,
+              "retryIntervalInSeconds": 30,
+              "secureOutput": false,
+              "secureInput": false
+            },
+            "typeProperties": {
+              "notebookId": "<REDACTED>",
+              "workspaceId": "<REDACTED>"
+            },
+            "externalReferences": {
+              "connection": "[parameters('NotebookAdmin admin')]"
+            }
+          },
+          {
+            "name": "Office365Email1",
+            "description": "Email to admin for pipline failure\n",
+            "type": "Office365Email",
+            "dependsOn": [
+              {
+                "activity": "SQl to Datalake CRM",
+                "dependencyConditions": [
+                  "Failed"
+                ]
+              },
+              {
+                "activity": "SQL to Datalake ERP",
+                "dependencyConditions": [
+                  "Failed"
+                ]
+              },
+              {
+                "activity": "Bronze to Silver to Gold",
+                "dependencyConditions": [
+                  "Failed"
+                ]
+              },
+              {
+                "activity": "Data Quality Checks",
+                "dependencyConditions": [
+                  "Failed"
+                ]
+              },
+              {
+                "activity": "Semantic model refresh1",
+                "dependencyConditions": [
+                  "Failed"
+                ]
+              }
+            ],
+            "policy": {
+              "timeout": "0.12:00:00",
+              "retry": 0,
+              "retryIntervalInSeconds": 30,
+              "secureOutput": false,
+              "secureInput": false
+            },
+            "typeProperties": {
+              "to": "<REDACTED_EMAIL>",
+              "subject": "Pipeline failed: daily_sales_pipeline",
+              "body": "<p><strong>Hi the pipeline:</strong> @{pipeline().Pipeline} has failed .</p>",
+              "importance": "Low"
+            },
+            "externalReferences": {
+              "connection": "[parameters('MicrosoftOutlook admin')]"
+            }
+          },
+          {
+            "name": "Bronze to Silver to Gold",
+            "type": "TridentNotebook",
+            "dependsOn": [
+              {
+                "activity": "SQL to Datalake ERP",
+                "dependencyConditions": [
+                  "Succeeded"
+                ]
+              }
+            ],
+            "policy": {
+              "timeout": "0.12:00:00",
+              "retry": 0,
+              "retryIntervalInSeconds": 30,
+              "secureOutput": false,
+              "secureInput": false
+            },
+            "typeProperties": {
+              "notebookId": "<REDACTED>",
+              "workspaceId": "<REDACTED>"
+            },
+            "externalReferences": {
+              "connection": "[parameters('NotebookAdmin admin')]"
+            }
+          }
+        ]
+      },
+      "dependsOn": []
+    }
+  ]
+}
